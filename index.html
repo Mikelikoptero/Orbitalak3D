@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbital Atomikoen Irudikapena</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --accent-color: #3A795E;
+            --text-color: #e6e6e6;
+            --text-muted: #cccccc;
+            --border-color: rgba(58,121,94,0.3);
+            --panel-bg: rgba(30,30,30,0.8);
+            --hover-color: rgba(58,121,94,0.2);
+            --active-color: rgba(58,121,94,0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text-color);
+            line-height: 1.6;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Panel lateral */
+        .sidebar {
+            width: 280px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .sidebar-header {
+            text-align: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 10px;
+        }
+
+        .sidebar-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--accent-color);
+            margin-bottom: 5px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .orbital-group {
+            margin-bottom: 10px;
+        }
+
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 10px;
+        }
+
+        .group-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        .group-toggle {
+            color: var(--text-muted);
+            font-size: 14px;
+            transition: transform 0.3s ease;
+        }
+
+        .group-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .orbital-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .orbital-list.collapsed {
+            max-height: 0;
+        }
+
+        .orbital-item {
+            padding: 12px 15px;
+            background: rgba(20,20,20,0.7);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .orbital-item:hover {
+            background: var(--hover-color);
+            transform: translateX(5px);
+        }
+
+        .orbital-item.active {
+            background: var(--active-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(58,121,94,0.3);
+        }
+
+        .orbital-name {
+            font-weight: 500;
+        }
+
+        .orbital-symbol {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: rgba(0,0,0,0.3);
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        /* Área de visualización 3D */
+        .viewer-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #modelViewer {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .viewer-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .model-info {
+            background: rgba(30,30,30,0.9);
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(5px);
+            max-width: 400px;
+            pointer-events: auto;
+        }
+
+        .model-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent-color);
+            margin-bottom: 5px;
+        }
+
+        .model-description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .control-btn {
+            background: rgba(30,30,30,0.9);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .control-btn:hover {
+            background: var(--hover-color);
+            transform: scale(1.05);
+        }
+
+        /* ELIMINADO: Estilo .control-btn.active para el botón de rotación */
+        /* .control-btn.active {
+            background: var(--active-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(58,121,94,0.3);
+        } */
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30,30,30,0.95);
+            padding: 20px 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(58,121,94,0.3);
+            border-top: 3px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 16px;
+            color: var(--text-color);
+        }
+
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(200, 60, 60, 0.9);
+            padding: 20px 30px;
+            border-radius: 8px;
+            border: 1px solid #ff4444;
+            text-align: center;
+            z-index: 20;
+            max-width: 400px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            
+            .orbital-list {
+                flex-direction: row;
+                overflow-x: auto;
+                padding-bottom: 10px;
+            }
+            
+            .orbital-item {
+                min-width: 150px;
+            }
+            
+            .viewer-overlay {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .controls {
+                align-self: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Panel lateral con menú de orbitales -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Orbital Atomikoak</div>
+            </div>
+            
+            <!-- Grupo S -->
+            <div class="orbital-group">
+                <div class="group-header" data-group="s">
+                    <div class="group-title">s Orbitala</div>
+                    <div class="group-toggle collapsed">▼</div>
+                </div>
+                <div class="orbital-list collapsed">
+                    <div class="orbital-item active" data-model="s" data-file="s.glb">
+                        <span class="orbital-name">s Orbitala</span>
+                        <span class="orbital-symbol">s</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grupo P -->
+            <div class="orbital-group">
+                <div class="group-header" data-group="p">
+                    <div class="group-title">p Orbitalak</div>
+                    <div class="group-toggle collapsed">▼</div>
+                </div>
+                <div class="orbital-list collapsed">
+                    <div class="orbital-item" data-model="p" data-file="p.glb">
+                        <span class="orbital-name">p Orbitala</span>
+                        <span class="orbital-symbol">p</span>
+                    </div>
+                    <div class="orbital-item" data-model="px" data-file="px.glb">
+                        <span class="orbital-name">px Orbitala</span>
+                        <span class="orbital-symbol">p</span>
+                    </div>
+                    <div class="orbital-item" data-model="py" data-file="py.glb">
+                        <span class="orbital-name">py Orbitala</span>
+                        <span class="orbital-symbol">p</span>
+                    </div>
+                    <div class="orbital-item" data-model="pz" data-file="pz.glb">
+                        <span class="orbital-name">pz Orbitala</span>
+                        <span class="orbital-symbol">p</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grupo D -->
+            <div class="orbital-group">
+                <div class="group-header" data-group="d">
+                    <div class="group-title">d Orbitalak</div>
+                    <div class="group-toggle collapsed">▼</div>
+                </div>
+                <div class="orbital-list collapsed">
+                    <div class="orbital-item" data-model="dxy" data-file="dxy.glb">
+                        <span class="orbital-name">dxy Orbitala</span>
+                        <span class="orbital-symbol">d</span>
+                    </div>
+                    <div class="orbital-item" data-model="dx2y2" data-file="dx2y2.glb">
+                        <span class="orbital-name">dx²-y² Orbitala</span>
+                        <span class="orbital-symbol">d</span>
+                    </div>
+                    <div class="orbital-item" data-model="dyz" data-file="dyz.glb">
+                        <span class="orbital-name">dyz Orbitala</span>
+                        <span class="orbital-symbol">d</span>
+                    </div>
+                    <div class="orbital-item" data-model="dzx" data-file="dzx.glb">
+                        <span class="orbital-name">dzx Orbitala</span>
+                        <span class="orbital-symbol">d</span>
+                    </div>
+                    <div class="orbital-item" data-model="dz2" data-file="dz2.glb">
+                        <span class="orbital-name">dz² Orbitala</span>
+                        <span class="orbital-symbol">d</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grupo F -->
+            <div class="orbital-group">
+                <div class="group-header" data-group="f">
+                    <div class="group-title">f Orbitalak</div>
+                    <div class="group-toggle collapsed">▼</div>
+                </div>
+                <div class="orbital-list collapsed">
+                    <div class="orbital-item" data-model="f1" data-file="f1.glb">
+                        <span class="orbital-name">f₁ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f2" data-file="f2.glb">
+                        <span class="orbital-name">f₂ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f3" data-file="f3.glb">
+                        <span class="orbital-name">f₃ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f4" data-file="f4.glb">
+                        <span class="orbital-name">f₄ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f5" data-file="f5.glb">
+                        <span class="orbital-name">f₅ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f6" data-file="f6.glb">
+                        <span class="orbital-name">f₆ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                    <div class="orbital-item" data-model="f7" data-file="f7.glb">
+                        <span class="orbital-name">f₇ Orbitala</span>
+                        <span class="orbital-symbol">f</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Área de visualización 3D -->
+        <div class="viewer-container">
+            <canvas id="modelViewer"></canvas>
+            
+            <div class="viewer-overlay">
+                <div class="model-info">
+                    <div class="model-title">s Orbitala</div>
+                    <div class="model-description">
+                        Orbital esferiko sinpleena, elektroi-dentsitate maximoa nukleotik gertu duena.
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <!-- QUITADA la clase 'active' del botón de rotación -->
+                    <button class="control-btn" id="rotateToggle" title="Aktibatu/Desaktibatu errotazioa">❚❚</button>
+                    <button class="control-btn" id="resetView" title="Berrabiarazi ikuspegia">↺</button>
+                </div>
+            </div>
+            
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Kargatzen...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales de Three.js
+        let scene, camera, renderer, controls;
+        let currentModel = null;
+        let autoRotate = true;
+        const loader = new THREE.GLTFLoader();
+        
+        // Base URL para los modelos GLB
+        const MODEL_BASE_URL = 'https://raw.githubusercontent.com/Mikelikoptero/Taularako-argazkiak/main/Orbitalak2/';
+        
+        // Datos de los orbitales
+        const orbitalData = {
+            's': {
+                title: 's Orbitala',
+                description: 'Orbital esferiko sinpleena, elektroi-dentsitate maximoa nukleotik gertu duena.'
+            },
+            'p': {
+                title: 'p Orbitala',
+                description: 'Orbital p orokorra, hiru orientazio posible dituena.'
+            },
+            'px': {
+                title: 'px Orbitala',
+                description: 'X ardatzean orientatutako orbital p, forma borobila duena.'
+            },
+            'py': {
+                title: 'py Orbitala',
+                description: 'Y ardatzean orientatutako orbital p, forma borobila duena.'
+            },
+            'pz': {
+                title: 'pz Orbitala',
+                description: 'Z ardatzean orientatutako orbital p, forma borobila duena.'
+            },
+            'dxy': {
+                title: 'dxy Orbitala',
+                description: 'XY planoan kokatutako orbital d, lau lobulu dituena.'
+            },
+            'dx2y2': {
+                title: 'dx²-y² Orbitala',
+                description: 'X eta Y ardatzetan kokatutako orbital d, lau lobulu dituena.'
+            },
+            'dyz': {
+                title: 'dyz Orbitala',
+                description: 'YZ planoan kokatutako orbital d, lau lobulu dituena.'
+            },
+            'dzx': {
+                title: 'dzx Orbitala',
+                description: 'ZX planoan kokatutako orbital d, lau lobulu dituena.'
+            },
+            'dz2': {
+                title: 'dz² Orbitala',
+                description: 'Z ardatzaren inguruan kokatutako orbital d, forma berezia duena.'
+            },
+            'f1': {
+                title: 'f₁ Orbitala',
+                description: 'Lehenengo orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f2': {
+                title: 'f₂ Orbitala',
+                description: 'Bigarren orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f3': {
+                title: 'f₃ Orbitala',
+                description: 'Hirugarren orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f4': {
+                title: 'f₄ Orbitala',
+                description: 'Laugarren orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f5': {
+                title: 'f₅ Orbitala',
+                description: 'Bostgarren orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f6': {
+                title: 'f₆ Orbitala',
+                description: 'Seigarren orbital f, konplexutasun handiagoko forma duena.'
+            },
+            'f7': {
+                title: 'f₇ Orbitala',
+                description: 'Zazpigarren orbital f, konplexutasun handiagoko forma duena.'
+            }
+        };
+
+        // Inicializar Three.js
+        function initThreeJS() {
+            // Crear escena
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            
+            // Crear cámara
+            const container = document.getElementById('modelViewer');
+            camera = new THREE.PerspectiveCamera(
+                60, 
+                container.clientWidth / container.clientHeight, 
+                0.1, 
+                1000
+            );
+            camera.position.set(0, 0, 3);
+            
+            // Crear renderizador
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: container,
+                antialias: true,
+                alpha: false
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1;
+            
+            // Añadir controles de órbita
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = autoRotate;
+            // Rotación en sentido contrario (negativo)
+            controls.autoRotateSpeed = -1.5;
+            controls.minDistance = 0.5;
+            controls.maxDistance = 10;
+            controls.enablePan = true;
+            
+            // Mejorar la iluminación
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+            
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight1.position.set(5, 5, 5);
+            scene.add(directionalLight1);
+            
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight2.position.set(-5, -5, -5);
+            scene.add(directionalLight2);
+            
+            const pointLight = new THREE.PointLight(0x3A795E, 0.5, 10);
+            pointLight.position.set(2, 2, 2);
+            scene.add(pointLight);
+            
+            // Cargar el modelo inicial
+            loadModel('s', 's.glb');
+            
+            // Manejar redimensionado de ventana
+            window.addEventListener('resize', onWindowResize);
+            
+            // Iniciar bucle de animación
+            animate();
+        }
+        
+        // Cargar modelo GLB
+        function loadModel(modelName, fileName) {
+            // Mostrar indicador de carga
+            document.getElementById('loadingIndicator').style.display = 'flex';
+            
+            // Eliminar modelo anterior si existe
+            if (currentModel) {
+                scene.remove(currentModel);
+                cleanupModel(currentModel);
+            }
+            
+            // Construir URL del modelo
+            const modelUrl = MODEL_BASE_URL + fileName;
+            
+            console.log('Cargando modelo:', modelUrl);
+            
+            // Cargar modelo GLB
+            loader.load(
+                modelUrl,
+                (gltf) => {
+                    currentModel = gltf.scene;
+                    
+                    // DEBUG: Ver información del modelo
+                    console.log('Modelo cargado:', modelName);
+                    console.log('Hijos del modelo:', currentModel.children);
+                    
+                    // Intentar diferentes enfoques para visualizar el modelo
+                    
+                    // Enfoque 1: Usar el modelo tal cual viene
+                    scene.add(currentModel);
+                    
+                    // Enfoque 2: Asegurar que todos los materiales sean visibles
+                    currentModel.traverse((child) => {
+                        if (child.isMesh) {
+                            console.log('Mesh encontrado:', child.name);
+                            console.log('Material:', child.material);
+                            
+                            // Hacer el material más visible
+                            if (child.material) {
+                                child.material.transparent = false;
+                                child.material.opacity = 1.0;
+                                child.material.depthWrite = true;
+                                child.material.depthTest = true;
+                                
+                                // Si el material es oscuro, cambiarlo a un color visible
+                                if (child.material.color) {
+                                    child.material.color.set(0x3A795E);
+                                }
+                                
+                                // Asegurar que el material se renderice
+                                child.material.needsUpdate = true;
+                            }
+                            
+                            // Asegurar que la geometría sea visible
+                            if (child.geometry) {
+                                console.log('Geometría:', child.geometry);
+                                child.visible = true;
+                            }
+                        }
+                    });
+                    
+                    // Enfoque 3: Ajustar escala y posición
+                    const box = new THREE.Box3().setFromObject(currentModel);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    
+                    console.log('Tamaño del modelo:', size);
+                    console.log('Centro del modelo:', center);
+                    
+                    // Si el modelo es muy pequeño o muy grande, escalarlo
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    let scale = 1;
+                    
+                    if (maxDim > 0) {
+                        if (maxDim < 0.1) {
+                            scale = 5 / maxDim;
+                        } else if (maxDim > 5) {
+                            scale = 2 / maxDim;
+                        } else {
+                            scale = 2 / maxDim;
+                        }
+                    }
+                    
+                    currentModel.scale.setScalar(scale);
+                    currentModel.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+                    
+                    // Enfoque 4: Resetear controles para enfocar el modelo
+                    controls.reset();
+                    controls.update();
+                    
+                    // Actualizar información del modelo
+                    updateModelInfo(modelName);
+                    
+                    // Ocultar indicador de carga después de un breve momento
+                    setTimeout(() => {
+                        document.getElementById('loadingIndicator').style.display = 'none';
+                    }, 500);
+                    
+                    console.log('Modelo procesado:', modelName);
+                },
+                (progress) => {
+                    const percent = (progress.loaded / progress.total * 100) || 0;
+                    console.log(`Cargando ${modelName}: ${percent.toFixed(1)}%`);
+                },
+                (error) => {
+                    console.error('Error cargando el modelo:', error);
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                    showError(`Errorea ${modelName} kargatzean: ${error.message}`);
+                }
+            );
+        }
+        
+        // Función para limpiar recursos del modelo
+        function cleanupModel(model) {
+            if (!model) return;
+            
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    if (child.geometry) {
+                        child.geometry.dispose();
+                    }
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(material => disposeMaterial(material));
+                        } else {
+                            disposeMaterial(child.material);
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Función auxiliar para limpiar materiales
+        function disposeMaterial(material) {
+            if (!material) return;
+            
+            Object.keys(material).forEach(key => {
+                const value = material[key];
+                if (value && typeof value === 'object' && 'isTexture' in value) {
+                    value.dispose();
+                }
+            });
+            material.dispose();
+        }
+        
+        // Actualizar información del modelo en la UI
+        function updateModelInfo(modelName) {
+            const info = orbitalData[modelName];
+            if (info) {
+                document.querySelector('.model-title').textContent = info.title;
+                document.querySelector('.model-description').textContent = info.description;
+            }
+        }
+        
+        // Mostrar mensaje de error
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <h3>Errorea</h3>
+                <p>${message}</p>
+                <p>Mesedez, egiaztatu konexioa eta saiatu berriro.</p>
+            `;
+            document.querySelector('.viewer-container').appendChild(errorDiv);
+            
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 5000);
+        }
+        
+        // Manejar redimensionado de ventana
+        function onWindowResize() {
+            const container = document.getElementById('modelViewer');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        
+        // Bucle de animación
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Inicializar cuando se carga la página
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                initThreeJS();
+                
+                // Configurar eventos para los elementos del menú
+                document.querySelectorAll('.orbital-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        document.querySelectorAll('.orbital-item').forEach(el => {
+                            el.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                        
+                        const modelName = this.getAttribute('data-model');
+                        const fileName = this.getAttribute('data-file');
+                        loadModel(modelName, fileName);
+                    });
+                });
+                
+                // Configurar acordeones para los grupos de orbitales
+                document.querySelectorAll('.group-header').forEach(header => {
+                    header.addEventListener('click', function() {
+                        const group = this.getAttribute('data-group');
+                        const list = this.nextElementSibling;
+                        const toggle = this.querySelector('.group-toggle');
+                        
+                        list.classList.toggle('collapsed');
+                        toggle.classList.toggle('collapsed');
+                    });
+                });
+                
+                // Configurar botón de rotación
+                const rotateBtn = document.getElementById('rotateToggle');
+                rotateBtn.addEventListener('click', function() {
+                    autoRotate = !autoRotate;
+                    controls.autoRotate = autoRotate;
+                    
+                    // Cambiar el icono según el estado
+                    if (autoRotate) {
+                        this.innerHTML = '❚❚'; // Pause
+                    } else {
+                        this.innerHTML = '▶'; // Play
+                    }
+                    
+                    // ELIMINADO: No añadir/quitar la clase 'active'
+                    // this.classList.toggle('active', autoRotate);
+                });
+                
+                // Configurar botón de reset
+                document.getElementById('resetView').addEventListener('click', function() {
+                    controls.reset();
+                });
+                
+            } catch (error) {
+                console.error('Error inicializando la aplicación:', error);
+                showError('Errorea aplikazioa abiaraztean: ' + error.message);
+            }
+        });
+
+        // Manejar errores globales
+        window.addEventListener('error', (e) => {
+            console.error('Error global:', e.error);
+        });
+    </script>
+</body>
+</html>
