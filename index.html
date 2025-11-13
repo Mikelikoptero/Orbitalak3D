@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Orbital Atomikoen Irudikapena</title>
     <style>
+        /* Tus estilos CSS anteriores se mantienen igual */
         * {
             margin: 0;
             padding: 0;
@@ -76,8 +77,8 @@
         }
 
         .orbital-option.active {
-            background: #81c784; /* Cambiado a verde que combina con los títulos */
-            color: #1a2a6c; /* Texto oscuro para mejor contraste */
+            background: #81c784;
+            color: #1a2a6c;
             box-shadow: 0 0 15px rgba(129, 199, 132, 0.8);
             transform: translateY(-2px);
             font-weight: 600;
@@ -86,6 +87,11 @@
         .orbital-option.loading {
             opacity: 0.6;
             cursor: wait;
+        }
+
+        .orbital-option.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .viewer {
@@ -189,7 +195,7 @@
 
         .status {
             position: absolute;
-            bottom: 120px; /* Cambiado de 80px a 120px para subirlo más */
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
@@ -234,6 +240,16 @@
                     <button class="orbital-option" data-orbital="px">px</button>
                     <button class="orbital-option" data-orbital="py">py</button>
                     <button class="orbital-option" data-orbital="pz">pz</button>
+                </div>
+            </div>
+            
+            <!-- Orbitales híbridos -->
+            <div class="orbital-category">
+                <h2>Orbital Hibridoak</h2>
+                <div class="orbital-options">
+                    <button class="orbital-option" data-orbital="sp">sp</button>
+                    <button class="orbital-option" data-orbital="sp2">sp²</button>
+                    <button class="orbital-option" data-orbital="sp3">sp³</button>
                 </div>
             </div>
             
@@ -307,6 +323,9 @@
             'px': 'px.glb',
             'py': 'py.glb',
             'pz': 'pz.glb',
+            'sp': 'sp_hybridization.glb',
+            'sp2': 'sp2_hybridization.glb',
+            'sp3': 'sp3_hybridization.glb',
             'dxy': 'dxy.glb',
             'dx2y2': 'dx2y2.glb',
             'dyz': 'dyz.glb',
@@ -321,14 +340,46 @@
             'f7': 'f7.glb'
         };
 
+        // ESCALAS INDIVIDUALES PARA CADA ORBITAL P - ¡MODIFICA AQUÍ!
+        const orbitalScales = {
+            's': [0.01, 0.01, 0.01],
+            'px': [0.01, 0.005, 0.005],
+            'py': [0.005, 0.005, 0.01],
+            'pz': [0.005, 0.01, 0.005],
+            'sp': [0.6, 0.6, 0.35],
+            'sp2': [0.35, 0.35, 0.35],
+            'sp3': [0.35, 0.35, 0.35],
+            'dxy': [0.01, 0.01, 0.01],
+            'dx2y2': [0.01, 0.01, 0.01],
+            'dyz': [0.01, 0.01, 0.01],
+            'dzx': [0.01, 0.01, 0.01],
+            'dz2': [0.01, 0.01, 0.01],
+            'f1': [0.01, 0.01, 0.01],
+            'f2': [0.01, 0.01, 0.01],
+            'f3': [0.01, 0.01, 0.01],
+            'f4': [0.01, 0.01, 0.01],
+            'f5': [0.01, 0.01, 0.01],
+            'f6': [0.01, 0.01, 0.01],
+            'f7': [0.01, 0.01, 0.01]
+        };
+
+        // Reglas de combinación
+        const combinationRules = {
+            'sp': ['py', 'pz'],    // sp puede combinarse con py y pz
+            'sp2': ['pz'],         // sp2 puede combinarse con pz
+            'sp3': []              // sp3 no puede combinarse con nada
+        };
+
         // Mapeo de categorías
         const orbitalCategories = {
             's': ['s'],
             'p': ['px', 'py', 'pz'],
+            'hybrid': ['sp', 'sp2', 'sp3'],
             'd': ['dxy', 'dx2y2', 'dyz', 'dzx', 'dz2'],
             'f': ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7']
         };
 
+        // Configuración de la escena
         function init() {
             // Escena
             scene = new THREE.Scene();
@@ -341,11 +392,13 @@
             // Renderizador
             renderer = new THREE.WebGLRenderer({ 
                 canvas: document.getElementById('orbital-canvas'), 
-                antialias: true
+                antialias: true,
+                alpha: false // Deshabilitar canal alfa para mejor rendimiento
             });
             renderer.setSize(window.innerWidth - 300, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.sortObjects = false; // Mejorar orden de renderizado
             
             // Controles
             controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -354,8 +407,30 @@
             controls.minDistance = 1;
             controls.maxDistance = 10;
             
-            // ILUMINACIÓN MUY FUERTE para ver los colores originales
-            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0); // Muy intenso
+            // Configuración de iluminación
+            setupLighting();
+            
+            // Ejes de referencia
+            const axesHelper = new THREE.AxesHelper(1);
+            scene.add(axesHelper);
+            
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            setupEventListeners();
+            
+            // Ocultar loading después de un tiempo
+            setTimeout(() => {
+                document.querySelector('.loading').style.display = 'none';
+                showStatus('Irudikatzeko orbital bat hautatu');
+            }, 1000);
+            
+            // Iniciar animación
+            animate();
+        }
+        
+        // Configuración de iluminación
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
             scene.add(ambientLight);
             
             const directionalLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -365,22 +440,9 @@
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.5);
             directionalLight2.position.set(-10, 5, -10);
             scene.add(directionalLight2);
-            
-            // Ejes de referencia
-            const axesHelper = new THREE.AxesHelper(1);
-            scene.add(axesHelper);
-            
-            window.addEventListener('resize', onWindowResize);
-            setupEventListeners();
-            
-            setTimeout(() => {
-                document.querySelector('.loading').style.display = 'none';
-                showStatus('Irudikatzeko orbital bat hautatu');
-            }, 1000);
-            
-            animate();
         }
         
+        // Configuración de event listeners
         function setupEventListeners() {
             document.querySelectorAll('.orbital-option').forEach(button => {
                 button.addEventListener('click', () => {
@@ -405,33 +467,84 @@
             return null;
         }
 
-        // Función para limpiar orbitales de otras categorías
-        function clearOtherCategories(currentCategory) {
-            for (const [category, orbitals] of Object.entries(orbitalCategories)) {
-                if (category !== currentCategory) {
-                    orbitals.forEach(orbital => {
-                        if (activeOrbitals.has(orbital)) {
-                            activeOrbitals.delete(orbital);
-                            
-                            // Remover modelo de la escena
-                            if (orbitalModels[orbital]) {
-                                scene.remove(orbitalModels[orbital]);
-                            }
-                            
-                            // Actualizar botón
-                            const button = document.querySelector(`[data-orbital="${orbital}"]`);
-                            if (button) {
-                                button.classList.remove('active');
-                                button.classList.remove('loading');
-                            }
-                        }
-                    });
+        // Función para verificar si un orbital puede combinarse con los activos
+        function canCombineWithActive(orbital) {
+            // Si no hay orbitales activos, siempre se puede añadir
+            if (activeOrbitals.size === 0) return true;
+            
+            // Verificar reglas para orbitales híbridos
+            if (combinationRules[orbital]) {
+                const allowedCombinations = combinationRules[orbital];
+                
+                // Verificar cada orbital activo
+                for (const activeOrbital of activeOrbitals) {
+                    // Si el orbital activo no está en la lista de permitidos, no se puede combinar
+                    if (!allowedCombinations.includes(activeOrbital)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            // Verificar si algún orbital híbrido activo permite esta combinación
+            for (const activeOrbital of activeOrbitals) {
+                if (combinationRules[activeOrbital]) {
+                    const allowedCombinations = combinationRules[activeOrbital];
+                    if (!allowedCombinations.includes(orbital)) {
+                        return false;
+                    }
                 }
             }
+            
+            return true;
+        }
+
+        // Función para actualizar el estado de los botones según las reglas de combinación
+        function updateButtonStates() {
+            document.querySelectorAll('.orbital-option').forEach(button => {
+                const orbital = button.getAttribute('data-orbital');
+                
+                if (activeOrbitals.size > 0 && !activeOrbitals.has(orbital)) {
+                    if (canCombineWithActive(orbital)) {
+                        button.classList.remove('disabled');
+                    } else {
+                        button.classList.add('disabled');
+                    }
+                } else {
+                    button.classList.remove('disabled');
+                }
+            });
+        }
+
+        // Función para limpiar orbitales incompatibles
+        function clearIncompatibleOrbitals(newOrbital) {
+            const orbitalsToRemove = [];
+            
+            for (const activeOrbital of activeOrbitals) {
+                if (!canCombineWithActive(newOrbital)) {
+                    orbitalsToRemove.push(activeOrbital);
+                }
+            }
+            
+            orbitalsToRemove.forEach(orbital => {
+                activeOrbitals.delete(orbital);
+                if (orbitalModels[orbital]) {
+                    scene.remove(orbitalModels[orbital]);
+                }
+                const button = document.querySelector(`[data-orbital="${orbital}"]`);
+                if (button) {
+                    button.classList.remove('active');
+                    button.classList.remove('loading');
+                }
+            });
         }
         
+        // Función para alternar orbitales
         async function toggleOrbital(orbital, button) {
-            const currentCategory = getOrbitalCategory(orbital);
+            if (button.classList.contains('disabled')) {
+                showStatus('Ezin da orbital hau besteekin konbinatu', true);
+                return;
+            }
             
             if (activeOrbitals.has(orbital)) {
                 // Si ya está activo, quitarlo
@@ -443,8 +556,8 @@
                     showStatus(`${orbital} orbitala kenduta`);
                 }
             } else {
-                // Limpiar orbitales de otras categorías antes de añadir el nuevo
-                clearOtherCategories(currentCategory);
+                // Limpiar orbitales incompatibles antes de añadir el nuevo
+                clearIncompatibleOrbitals(orbital);
                 
                 // Añadir el nuevo orbital
                 activeOrbitals.add(orbital);
@@ -463,8 +576,12 @@
                     showStatus(`${orbital} ezartzen errorea`, true);
                 }
             }
+            
+            // Actualizar estado de todos los botones
+            updateButtonStates();
         }
         
+        // Función para cargar modelos orbitales
         function loadOrbitalModel(orbital) {
             return new Promise((resolve, reject) => {
                 const filename = orbitalFiles[orbital];
@@ -483,33 +600,56 @@
                         const model = gltf.scene;
                         model.name = orbital;
                         
-                        // ESCALA MUY PEQUEÑA - mantener los materiales originales
-                        model.scale.set(0.01, 0.01, 0.01);
+                        // OBTENER ESCALA DESDE EL OBJETO orbitalScales
+                        const scale = orbitalScales[orbital] || [0.01, 0.01, 0.01];
+                        model.scale.set(scale[0], scale[1], scale[2]);
+                        
+                        // CONFIGURACIONES ESPECIALES PARA HIBRIDACIONES
+                        if (orbital === 'sp' || orbital === 'sp2' || orbital === 'sp3') {
+                            // ROTACIÓN DE 90 GRADOS EN EL EJE Y
+                            model.rotation.y = Math.PI / 2; // 90 grados en radianes
+                            
+                            // FORZAR MATERIALES OPACOS PARA HIBRIDACIONES
+                            model.traverse((child) => {
+                                if (child.isMesh) {
+                                    if (child.material) {
+                                        // Hacer el material completamente opaco
+                                        child.material.transparent = false;
+                                        child.material.opacity = 1.0;
+                                        child.material.depthWrite = true;
+                                        child.material.depthTest = true;
+                                        child.material.alphaTest = 0;
+                                        child.material.blending = THREE.NormalBlending;
+                                        
+                                        // Deshabilitar cualquier transparencia
+                                        if (child.material.map) {
+                                            child.material.map.format = THREE.RGBFormat;
+                                        }
+                                        
+                                        child.material.needsUpdate = true;
+                                    }
+                                }
+                            });
+                        } else {
+                            // Materiales normales para orbitales no híbridos
+                            model.traverse((child) => {
+                                if (child.isMesh) {
+                                    if (child.material) {
+                                        child.material.transparent = false;
+                                        child.material.opacity = 1.0;
+                                        child.material.needsUpdate = true;
+                                    }
+                                }
+                            });
+                        }
                         
                         // Centrar el modelo
                         model.position.set(0, 0, 0);
                         
-                        // MANTENER LOS MATERIALES ORIGINALES DEL GLB
-                        // No modificar los materiales, usar los que vienen en el archivo
-                        
-                        // Solo asegurarnos de que sean visibles
-                        model.traverse((child) => {
-                            if (child.isMesh) {
-                                // Mantener el material original
-                                // Solo ajustar si es necesario para la iluminación
-                                if (child.material) {
-                                    // Asegurar que el material sea visible
-                                    child.material.transparent = false;
-                                    child.material.opacity = 1.0;
-                                    child.material.needsUpdate = true;
-                                }
-                            }
-                        });
-                        
                         orbitalModels[orbital] = model;
                         scene.add(model);
                         
-                        console.log(`Modelo ${orbital} cargado con materiales originales`);
+                        console.log(`Modelo ${orbital} cargado con escala: [${scale[0]}, ${scale[1]}, ${scale[2]}]`);
                         resolve();
                     },
                     (progress) => {
@@ -526,10 +666,11 @@
             });
         }
         
+        // Función para mostrar mensajes de estado
         function showStatus(message, isError = false) {
             const statusElement = document.getElementById('status-message');
             statusElement.textContent = message;
-            statusElement.style.color = isError ? '#ff5252' : '#81c784'; /* Mismo verde claro */
+            statusElement.style.color = isError ? '#ff5252' : '#81c784';
             statusElement.style.display = 'block';
             
             setTimeout(() => {
@@ -537,12 +678,14 @@
             }, 3000);
         }
         
+        // Función para resetear la vista
         function resetView() {
             controls.reset();
             camera.position.set(0, 0, 3);
             showStatus('Ikuspuntua berrabiarazita');
         }
         
+        // Función para alternar rotación automática
         function toggleRotation() {
             isRotating = !isRotating;
             const button = document.getElementById('toggle-rotation');
@@ -550,11 +693,13 @@
             showStatus(isRotating ? 'Biratzen' : 'Geldirik');
         }
         
+        // Función para hacer zoom
         function zoom(factor) {
             camera.position.multiplyScalar(factor);
             controls.update();
         }
         
+        // Función para manejar el redimensionado de ventana
         function onWindowResize() {
             const width = window.innerWidth - 300;
             const height = window.innerHeight;
@@ -564,6 +709,7 @@
             renderer.setSize(width, height);
         }
         
+        // Función de animación
         function animate() {
             requestAnimationFrame(animate);
             
@@ -578,7 +724,7 @@
             renderer.render(scene, camera);
         }
         
-        // Iniciar
+        // Iniciar aplicación
         init();
     </script>
 </body>
