@@ -363,13 +363,6 @@
             'f7': [0.01, 0.01, 0.01]
         };
 
-        // Reglas de combinación
-        const combinationRules = {
-            'sp': ['py', 'pz'],    // sp puede combinarse con py y pz
-            'sp2': ['pz'],         // sp2 puede combinarse con pz
-            'sp3': []              // sp3 no puede combinarse con nada
-        };
-
         // Mapeo de categorías
         const orbitalCategories = {
             's': ['s'],
@@ -472,25 +465,25 @@
             // Si no hay orbitales activos, siempre se puede añadir
             if (activeOrbitals.size === 0) return true;
             
-            // Verificar reglas para orbitales híbridos
-            if (combinationRules[orbital]) {
-                const allowedCombinations = combinationRules[orbital];
-                
-                // Verificar cada orbital activo
-                for (const activeOrbital of activeOrbitals) {
-                    // Si el orbital activo no está en la lista de permitidos, no se puede combinar
-                    if (!allowedCombinations.includes(activeOrbital)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
+            // Obtener la categoría del nuevo orbital
+            const newOrbitalCategory = getOrbitalCategory(orbital);
             
-            // Verificar si algún orbital híbrido activo permite esta combinación
+            // Verificar si ya hay orbitales activos de diferentes categorías
             for (const activeOrbital of activeOrbitals) {
-                if (combinationRules[activeOrbital]) {
-                    const allowedCombinations = combinationRules[activeOrbital];
-                    if (!allowedCombinations.includes(orbital)) {
+                const activeOrbitalCategory = getOrbitalCategory(activeOrbital);
+                
+                // Si las categorías son diferentes, verificar si es una combinación permitida
+                if (newOrbitalCategory !== activeOrbitalCategory) {
+                    // Verificar combinaciones permitidas específicas
+                    const isAllowedCombination = 
+                        // sp con py y pz
+                        ((orbital === 'sp' && (activeOrbital === 'py' || activeOrbital === 'pz')) ||
+                        ((activeOrbital === 'sp' && (orbital === 'py' || orbital === 'pz'))) ||
+                        // sp2 con pz
+                        ((orbital === 'sp2' && activeOrbital === 'pz') ||
+                        (activeOrbital === 'sp2' && orbital === 'pz')));
+                    
+                    if (!isAllowedCombination) {
                         return false;
                     }
                 }
